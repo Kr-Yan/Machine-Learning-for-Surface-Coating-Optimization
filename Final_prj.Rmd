@@ -1,0 +1,1223 @@
+---
+title: "Final_Proj"
+author: "Kairuo Yan"
+date: "2022-11-26"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Packages
+
+```{r, load_tidyverse}
+library(tidyverse)
+library(klaR)
+library(kernlab)
+library(pls)
+```
+
+## Read data
+
+Please download the final project data from Canvas. If this Rmarkdown
+file is located in the same directory as the downloaded CSV file, it
+will be able to load in the data for you. It is **highly** recommended
+that you use an RStudio RProject to more easily manage the working
+directory and file paths of the code and objects associated with the
+final project.
+
+The code chunk below reads in the final project data.
+
+```{r, read_final_data}
+df <- readr::read_csv("fall2022_finalproject.csv", col_names = TRUE)
+```
+
+## Derived quantities
+
+```{r, show_derived_features}
+df<- df %>% 
+  mutate(x5 = 1 - (x1 + x2 + x3 + x4),
+         w = x2 / (x3 + x4),
+         z = (x1 + x2) / (x5 + x4),
+         t = v1 * v2) %>% 
+  glimpse()
+```
+
+```{r, show_logit_transform}
+df<- df %>% 
+  mutate(y = boot::logit(output)) %>% 
+  glimpse()
+```
+
+```{r, show_binary_outcome}
+df<- df %>% 
+  mutate(outcome = ifelse(output < 0.33, 'event', 'non_event'),
+         outcome = factor(outcome, levels = c("event", "non_event"))) %>% 
+  glimpse()
+```
+
+##Exploration
+
+#Visualize the distribution of the variables in the data set. For
+provided features:
+
+```{r}
+ggplot(df, aes(x=x1))+geom_histogram(bins=30)
+ggplot(df, aes(x=x2))+geom_histogram(bins=30)
+ggplot(df, aes(x=x3))+geom_histogram(bins=30)
+ggplot(df, aes(x=x4))+geom_histogram(bins=30)
+ggplot(df, aes(x=x5))+geom_histogram(bins=30)
+ggplot(df, aes(x=v1))+geom_histogram(bins=30)
+ggplot(df, aes(x=v2))+geom_histogram(bins=30)
+ggplot(df, aes(x=v3))+geom_histogram(bins=30)
+ggplot(df, aes(x=v4))+geom_histogram(bins=30)
+ggplot(df, aes(x=v5))+geom_histogram(bins=30)
+ggplot(df, aes(x=m))+geom_bar(aes(fill=m))
+```
+
+For derived features:
+
+```{r}
+ggplot(df, aes(x=w))+geom_histogram(bins=30)
+ggplot(df, aes(x=z))+geom_histogram(bins=30)
+ggplot(df, aes(x=t))+geom_histogram(bins=30)
+```
+
+Distribution of the output and the logit transformed response:
+
+```{r}
+ggplot(df, aes(x=y))+geom_histogram(bins=30)
+ggplot(df, aes(x=output))+geom_histogram(bins=30)
+```
+
+#Group by variable
+
+For provided variables:
+
+```{r}
+ggplot(df, aes(x=x1))+geom_histogram(bins=30, aes(fill=m))
+ggplot(df, aes(x=x2))+geom_histogram(bins=30, aes(fill=m))
+ggplot(df, aes(x=x3))+geom_histogram(bins=30, aes(fill=m))
+ggplot(df, aes(x=x4))+geom_histogram(bins=30, aes(fill=m))
+ggplot(df, aes(x=x5))+geom_histogram(bins=30, aes(fill=m))
+ggplot(df, aes(x=v1))+geom_histogram(bins=30, aes(fill=m))
+ggplot(df, aes(x=v2))+geom_histogram(bins=30, aes(fill=m))
+ggplot(df, aes(x=v3))+geom_histogram(bins=30, aes(fill=m))
+ggplot(df, aes(x=v4))+geom_histogram(bins=30, aes(fill=m))
+ggplot(df, aes(x=v5))+geom_histogram(bins=30, aes(fill=m))
+ggplot(df, aes(x=m))+geom_bar(aes(fill=m))
+```
+
+For derived features:
+
+```{r}
+ggplot(df, aes(x=w))+geom_histogram(bins=30, aes(fill=m))
+ggplot(df, aes(x=z))+geom_histogram(bins=30, aes(fill=m))
+ggplot(df, aes(x=t))+geom_histogram(bins=30, aes(fill=m))
+```
+
+Distribution of the output and the logit transformed response:
+
+```{r}
+ggplot(df, aes(x=y))+geom_histogram(bins=30, aes(fill=m))
+ggplot(df, aes(x=output))+geom_histogram(bins=30, aes(fill=m))
+```
+
+for both input and output variables, there are differences based on
+discrete group.
+
+# Visualize the relationships between the inputs (" base features " and derived features)
+
+```{r}
+corrplot::corrplot(cor(df[, -c(10:17)]), type="upper")
+```
+
+Some base features and derived features are strongly correlated. For
+example x5 and z, x2 and w, v1 and t, v2 and t,x2 and x5, x3 and x5 etc.
+
+```{r}
+ggplot(df)+ geom_point(aes(x=x5, y=z))
+ggplot(df)+ geom_point(aes(x=x2, y=w))
+ggplot(df)+ geom_point(aes(x=v1, y=t))
+ggplot(df)+ geom_point(aes(x=v2, y=t))
+ggplot(df)+ geom_point(aes(x=x3, y=x5))
+ggplot(df)+ geom_point(aes(x=x2, y=x5))
+ggplot(df)+ geom_point(aes(x=x1, y=x5))
+ggplot(df)+ geom_point(aes(x=x1, y=z))
+ggplot(df)+ geom_point(aes(x=x2, y=z))
+```
+
+Visualize the relationships between the responses ( output and the logit
+transformed response) with respect to the inputs (" base features " and
+derived)
+
+```{r}
+mydf<-df %>% select_if(is.numeric)
+corrplot::corrplot(cor(mydf), type="upper")
+```
+
+```{r}
+ggplot(df)+geom_point(aes(x=x1, y=y))
+ggplot(df)+geom_point(aes(x=z, y=y))
+ggplot(df)+geom_point(aes(x=w, y=y))
+ggplot(df)+geom_point(aes(x=x5, y=y))
+ggplot(df)+geom_point(aes(x=x3, y=y))
+```
+
+#binary
+
+```{r}
+ggplot(df, aes(x=x1, y=outcome))+ geom_jitter(height = 0.02, width=0) 
+ggplot(df, aes(x=x2, y=outcome))+ geom_jitter(height = 0.02, width=0)
+ggplot(df, aes(x=x3, y=outcome))+ geom_jitter(height = 0.02, width=0)
+ggplot(df, aes(x=x4, y=outcome))+ geom_jitter(height = 0.02, width=0) 
+ggplot(df, aes(x=x5, y=outcome))+ geom_jitter(height = 0.02, width=0)
+ggplot(df, aes(x=v1, y=outcome))+ geom_jitter(height = 0.02, width=0) 
+ggplot(df, aes(x=v2, y=outcome))+ geom_jitter(height = 0.02, width=0) 
+ggplot(df, aes(x=v3, y=outcome))+ geom_jitter(height = 0.02, width=0) 
+ggplot(df, aes(x=v4, y=outcome))+ geom_jitter(height = 0.02, width=0) 
+ggplot(df, aes(x=v5, y=outcome))+ geom_jitter(height = 0.02, width=0) 
+```
+
+## Regression Model
+
+#A) Train linear Models base feature set:
+
+```{r}
+mod01<- lm(y~x1+x2+x3+x4+v1+v2+v3+v4+v5+m,df)
+mod02<- lm(y~m*(x1+x2+x3+x4+v1+v2+v3+v4+v5),df)
+mod03<- lm(y~(x1+x2+x3+x4+v1+v2+v3+v4+v5)*(x1+x2+x3+x4+v1+v2+v3+v4+v5),df)
+summary(mod02)
+```
+
+expanded feature set:
+
+```{r}
+mod04<- lm(y~x1+x2+x3+x4+v1+v2+v3+v4+v5+m+w+z+t+x5,df)
+mod05<- lm(y~m*(x1+x2+x3+x4+v1+v2+v3+v4+v5+w+z+t+x5),df)
+mod06<- lm(y~(x1+x2+x3+x4+v1+v2+v3+v4+v5+w+z+t+x5)*(x1+x2+x3+x4+v1+v2+v3+v4+v5+w+z+t+x5),df)
+summary(mod06)
+```
+
+3 Models linear basis function models:
+
+```{r}
+mod07<- lm(y~(x1+x2+x3+v5)*z*w,df)
+mod08<- lm(y~(splines::ns(z,12))*x5*w+m, df)
+mod09<- lm(y~(w+z+t+x5)*(w+z+t+x5), df)
+summary(mod09)
+```
+
+#B) Model Comparison
+
+```{r}
+broom::glance(mod01)
+broom::glance(mod02)
+broom::glance(mod03)
+broom::glance(mod04)
+broom::glance(mod05)
+broom::glance(mod06)
+broom::glance(mod07)
+broom::glance(mod08)
+broom::glance(mod09)
+```
+
+```{r}
+coefplot::coefplot(mod06)
+coefplot::coefplot(mod08)
+coefplot::coefplot(mod07)
+```
+
+I used AIC as the performance metric and found that mod6, mod8 and mod7
+are the best models. Several inputs are important: x2, x1, x2:x5, x2:x3,
+x1:x2, x1:x2, x5:w, x2:x4, splines::ns(z,12):w, z, x1:z, x1:z:w, and
+splines::ns(z,12).
+
+#B)Bayesian Linear models
+
+```{r}
+Xmat_07<- model.matrix(mod07)
+Xmat_08<- model.matrix(mod08)
+```
+
+I choose mod07 as my second model because I want to see the effect of
+x1, x2 and x3.
+
+```{r}
+
+info_07<- list(
+  yobs = df$y,
+  design_matrix = Xmat_07,
+  mu_beta = 0,
+  tau_beta = 1,
+  sigma_rate = 1
+)
+
+info_08<- list(
+  yobs = df$y,
+  design_matrix = Xmat_08,
+  mu_beta = 0,
+  tau_beta = 1,
+  sigma_rate = 1
+)
+
+```
+
+```{r}
+logistic_logpost <- function(unknowns, my_info)
+{
+  # specify the number of unknown beta parameters
+  length_beta <- ncol(my_info$design_matrix)
+  
+  # extract the beta parameters from the `unknowns` vector
+  beta_v <- unknowns[1:length_beta]
+  
+  # extract the unbounded noise parameter, varphi
+  lik_varphi <- unknowns[length_beta + 1]
+  
+  # back-transform from varphi to sigma
+  lik_sigma <- exp(lik_varphi)
+  
+  # extract design matrix
+  X <- my_info$design_matrix
+  
+  # calculate the linear predictor
+  mu <- as.vector( X %*% as.matrix(beta_v) )
+  
+  # evaluate the log-likelihood
+  log_lik <- sum(dnorm(x = my_info$yobs,
+                       mean = mu,
+                       sd = lik_sigma,
+                       log = TRUE))
+  
+  # evaluate the log-prior
+  log_prior_beta <- sum(dnorm(x = beta_v,
+                              mean = my_info$mu_beta,
+                              sd = my_info$tau_beta,
+                              log = TRUE))
+  
+  log_prior_sigma <- dexp(x = lik_sigma,
+                          rate = my_info$sigma_rate,
+                          log = TRUE)
+  
+  # add the mean trend prior and noise prior together
+  log_prior <- log_prior_beta + log_prior_sigma
+  
+  # account for the transformation
+  log_derive_adjust <- lik_varphi
+  
+  # sum together
+  log_lik + log_prior + log_derive_adjust
+}
+```
+
+```{r}
+my_laplace <- function(start_guess, logpost_func, ...)
+{
+  # code adapted from the `LearnBayes`` function `laplace()`
+  fit <- optim(start_guess,
+               logpost_func,
+               gr = NULL,
+               ...,
+               method = "BFGS",
+               hessian = TRUE,
+               control = list(fnscale = -1, maxit = 1001))
+  
+  mode <- fit$par
+  post_var_matrix <- -solve(fit$hessian)
+  p <- length(mode)
+  int <- p/2 * log(2 * pi) + 0.5 * log(det(post_var_matrix)) + logpost_func(mode, ...)
+  # package all of the results into a list
+  list(mode = mode,
+       var_matrix = post_var_matrix,
+       log_evidence = int,
+       converge = ifelse(fit$convergence == 0,
+                         "YES", 
+                         "NO"),
+       iter_counts = as.numeric(fit$counts[1]))
+}
+
+```
+
+```{r}
+laplace_07 <- my_laplace(rep(0, ncol(Xmat_07)+1), logistic_logpost, info_07)
+
+laplace_08 <- my_laplace(rep(0, ncol(Xmat_08)+1), logistic_logpost, info_08)
+
+```
+
+```{r}
+viz_post_coefs <- function(post_means, post_sds, xnames)
+{
+  tibble::tibble(
+    mu = post_means,
+    sd = post_sds,
+    x = xnames
+  ) %>% 
+    mutate(x = factor(x, levels = xnames)) %>% 
+    ggplot(mapping = aes(x = x)) +
+    geom_hline(yintercept = 0, color = 'grey', linetype = 'dashed') +
+    geom_point(mapping = aes(y = mu)) +
+    geom_linerange(mapping = aes(ymin = mu - 2 * sd,
+                                 ymax = mu + 2 * sd,
+                                 group = x)) +
+    labs(x = 'feature', y = 'coefficient value') +
+    coord_flip() +
+    theme_bw()
+}
+
+```
+
+```{r}
+viz_post_coefs(laplace_08$mode[1:ncol(Xmat_08)],
+               sqrt(diag(laplace_08$var_matrix)[1:ncol(Xmat_08)]),
+               colnames(Xmat_08))
+```
+
+```{r}
+laplace_07$log_evidence/laplace_08$log_evidence
+```
+
+model08 is better.
+
+Study the posterior uncertainty in the noise (residual error), 𝜎. How
+does the lm maximum likelihood estimate (MLE) on 𝜎relate to the
+posterior uncertainty on 𝜎?
+
+#C) ) Linear models Predictions
+
+```{r, make_tidy_predict_function}
+tidy_predict <- function(mod, xnew)
+{
+  pred_df <- predict(mod, xnew, interval = "confidence") %>% 
+    as.data.frame() %>% tibble::as_tibble() %>% 
+    dplyr::select(pred = fit, ci_lwr = lwr, ci_upr = upr) %>% 
+    bind_cols(predict(mod, xnew, interval = 'prediction') %>% 
+                as.data.frame() %>% tibble::as_tibble() %>% 
+                dplyr::select(pred_lwr = lwr, pred_upr = upr))
+  
+  xnew %>% bind_cols(pred_df)
+}
+```
+
+```{r, warning=FALSE}
+pred_lm_07 <- tidy_predict(mod07, df)
+pred_lm_08 <- tidy_predict(mod08, df)
+```
+
+```{r}
+pred_lm_07 %>% 
+  ggplot(mapping = aes(x = x1)) +
+  geom_ribbon(mapping = aes(ymin = pred_lwr, ymax = pred_upr),
+              fill = 'orange') +
+  geom_ribbon(mapping = aes(ymin = ci_lwr, ymax = ci_upr),
+              fill = 'grey') +
+  geom_line(mapping = aes(y = pred),
+            color = 'black') +
+  coord_cartesian(ylim = c(-7, 7)) +
+  facet_wrap(~m, labeller = "label_both") +
+  theme_bw()
+```
+
+```{r}
+pred_lm_08 %>% 
+  ggplot(mapping = aes(x = w)) +
+  geom_ribbon(mapping = aes(ymin = pred_lwr, ymax = pred_upr),
+              fill = 'orange') +
+  geom_ribbon(mapping = aes(ymin = ci_lwr, ymax = ci_upr),
+              fill = 'grey') +
+  geom_line(mapping = aes(y = pred),
+            color = 'black') +
+  coord_cartesian(ylim = c(-7, 7)) +
+  facet_wrap(~m, labeller = "label_both") +
+  theme_bw()
+```
+
+The predictive trends are consistent between the 2 selected linear
+models.
+
+# D) Train/tune with resampling
+
+```{r}
+library(caret)
+
+my_ctrl <- trainControl(method = 'repeatedcv', number = 10, repeats = 3)
+
+my_metric <- "RMSE"
+```
+
+#Linear Model:
+
+```{r}
+library(glmnet)
+set.seed(1234)
+lm_mod_base <- train(y ~ x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m ,
+                      data = df,
+                      method = 'lm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+```
+
+```{r}
+set.seed(1234)
+lm_mod_expand<- train(y ~ x5+t+z+w,
+                      data = df,
+                      method = 'lm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+```
+
+```{r, warning=FALSE}
+set.seed(1234)
+lm_mod_07<- train(y ~ (x1+x2+x3+v5)*z*w,
+                      data = df,
+                      method = 'lm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+```
+
+```{r}
+set.seed(1234)
+lm_mod_08<- train(y ~ (splines::ns(z,12))*x5*w+m,
+                      data = df,
+                      method = 'lm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+```
+
+```{r}
+lm_results = resamples(list(fit_01 = lm_mod_base,
+                                fit_02 = lm_mod_expand,
+                                fit_03 = lm_mod_07,
+                                fit_04 = lm_mod_08))
+summary(lm_results, metric="RMSE")
+```
+
+#Elastic Net
+
+```{r}
+enet_mod10 <- caret::train(y ~ (x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w)*m, data = df, method = "glmnet", 
+                             metric = my_metric, preProcess = c("center", "scale"),
+                             trControl = my_ctrl)
+
+turning_grid_10 <- exp(seq(log(min(enet_mod10$results$lambda)),
+                          log(max(enet_mod10$results$lambda)),
+                          length.out = 25))
+
+enet_grid_mod10 <- expand.grid(alpha = seq(0.1, 1.0, by = 0.1),
+                         lambda = turning_grid_10)
+```
+
+```{r}
+set.seed(1234)
+
+enet_tune_10 <- train(y~ (x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w)*m,
+                   data = df,
+                   method = 'glmnet',
+                   metric = my_metric,
+                   tuneGrid = enet_grid_mod10,
+                   preProcess = c("center", "scale"),
+                   trControl = my_ctrl)
+plot(enet_tune_10, xTrans=log)
+```
+
+```{r}
+enet_mod07 <- caret::train(y~(x1+x2+x3+v5)*z*w, data = df, method = "glmnet", 
+                             metric = my_metric, preProcess = c("center", "scale"),
+                             trControl = my_ctrl)
+turning_grid_07 <- exp(seq(log(min(enet_mod07$results$lambda)),
+                          log(max(enet_mod07$results$lambda)),
+                          length.out = 25))
+
+enet_grid_mod07 <- expand.grid(alpha = seq(0.1, 1.0, by = 0.1),
+                         lambda = turning_grid_07)
+```
+
+```{r}
+set.seed(1234)
+
+enet_tune_07<- train(y~(x1+x2+x3+v5)*z*w,
+                   data = df,
+                   method = 'glmnet',
+                   metric = my_metric,
+                   tuneGrid = enet_grid_mod07,
+                   preProcess = c("center", "scale"),
+                   trControl = my_ctrl)
+plot(enet_tune_07, xTrans=log)
+```
+
+```{r}
+enet_mod08 <- caret::train(y~(splines::ns(z,12))*x5*w+m, data = df, method = "glmnet", 
+                             metric = my_metric, preProcess = c("center", "scale"),
+                             trControl = my_ctrl)
+turning_grid_08 <- exp(seq(log(min(enet_mod08$results$lambda)),
+                          log(max(enet_mod08$results$lambda)),
+                          length.out = 25))
+
+enet_grid_mod08 <- expand.grid(alpha = seq(0.1, 1.0, by = 0.1),
+                         lambda = turning_grid_08)
+```
+
+```{r}
+set.seed(1234)
+
+enet_tune_08<- train(y~(splines::ns(z,12))*x5*w+m,
+                   data = df,
+                   method = 'glmnet',
+                   metric = my_metric,
+                   tuneGrid = enet_grid_mod08,
+                   preProcess = c("center", "scale"),
+                   trControl = my_ctrl)
+plot(enet_tune_08, xTrans=log)
+
+
+```
+
+# Neural Network
+
+```{r}
+nnet_grid <- expand.grid(
+                        size = c(5,9,13,17),
+                        decay = exp(seq(-6,0,length.out = 11)))
+
+```
+
+```{r}
+set.seed(1234)
+nnet_tune_base <- caret::train(y ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,
+                   data = df,
+                   method = 'nnet',
+                   metric = my_metric,
+                   preProcess = c("center", "scale"),
+                   tuneGrid = nnet_grid,
+                   trControl = my_ctrl,
+                   trace = FALSE)
+nnet_tune_base
+```
+
+```{r}
+set.seed(1234)
+nnet_tune_expand <- caret::train(y ~t+z+w+x5,
+                   data = df,
+                   method = 'nnet',
+                   metric = my_metric,
+                   preProcess = c("center", "scale"),
+                   tuneGrid = nnet_grid,
+                   trControl = my_ctrl,
+                   trace = FALSE)
+nnet_tune_expand
+```
+
+# Random Forest
+
+```{r}
+set.seed(1234)
+rf_base <- train(y ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,  data = df, method = "rf", importance = TRUE,metric = my_metric,
+                             trControl = my_ctrl,)
+rf_base
+```
+
+```{r}
+set.seed(1234)
+rf_expand <- train(y ~t+z+w+x5,  data = df, method = "rf", importance = TRUE,metric = my_metric,
+                             trControl = my_ctrl,)
+rf_expand
+```
+
+```{r, save_mod01}
+rf_expand %>% readr::write_rds("rf_mod1.rds")
+```
+
+# Gradient Boost Tree (GBT)
+
+```{r}
+set.seed(1234)
+xgb_base <- train(y ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,  data = df, method = "xgbTree", importance = TRUE,metric = my_metric,
+                             trControl = my_ctrl,tracing = FALSE)
+xgb_base
+```
+
+```{r}
+set.seed(1234)
+xgb_expand <- train(y ~t+z+w+x5,  data = df, method = "xgbTree", importance = TRUE,metric = my_metric,
+                             trControl = my_ctrl,tracing = FALSE)
+xgb_expand
+```
+
+# SVM
+
+```{r}
+set.seed(1234)
+svm_base <- train(y ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,  data = df, method = "svmLinear", importance = TRUE,metric = my_metric, trControl = my_ctrl,tracing = FALSE)
+svm_base
+```
+
+```{r}
+set.seed(1234)
+svm_expand <- train(y ~t+z+w+x5,  data = df, method = "svmLinear", importance = TRUE,metric = my_metric, trControl = my_ctrl,tracing = FALSE)
+svm_expand
+```
+
+#PCA
+
+```{r}
+set.seed(1234)
+pca_base <- train(y ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,  data = df, method = "pcr", importance = TRUE,metric = my_metric, trControl = my_ctrl,tracing = FALSE)
+pca_base 
+```
+
+```{r}
+pca_expand <- train(y ~t+z+w+x5,  data = df, method = "pcr", importance = TRUE,metric = my_metric, trControl = my_ctrl,tracing = FALSE)
+pca_expand
+```
+
+The best model is random forest tree, since it has the highest
+r-squared, which means the model fits the best in that way.
+
+##iii). Classification #A) Train Classification Models base feature set:
+
+```{r}
+df$outcome <- factor(df$outcome, labels = c(0,1), levels = c('non_event', 'event'))
+df$outcomes <- as.numeric(df$outcome)-1
+```
+
+```{r}
+cmod01<- glm(outcomes~x1+x2+x3+x4+v1+v2+v3+v4+v5+m,family="binomial",df)
+cmod02<- glm(outcomes~m*(x1+x2+x3+x4+v1+v2+v3+v4+v5),family="binomial",df)
+cmod03<- glm(outcomes~(x1+x2+x3+x4+v1+v2+v3+v4+v5)*(x1+x2+x3+x4+v1+v2+v3+v4+v5),family="binomial",df)
+```
+
+expanded feature set:
+
+```{r}
+cmod04<- glm(outcomes~x1+x2+x3+x4+v1+v2+v3+v4+v5+m+w+z+t+x5,family="binomial",df)
+cmod05<- glm(outcomes~m*(x1+x2+x3+x4+v1+v2+v3+v4+v5+w+z+t+x5),family="binomial",df)
+cmod06<- glm(outcomes~(x1+x2+x3+x4+v1+v2+v3+v4+v5+w+z+t+x5)*(x1+x2+x3+x4+v1+v2+v3+v4+v5+w+z+t+x5),family="binomial",df)
+```
+
+3 Models linear basis function models:
+
+```{r}
+cmod07<- glm(outcomes~(x1+x2+x3+v5)*z*w+m,family="binomial",df)
+cmod08<- glm(outcomes~(splines::ns(z,12))*x5*w+m, family="binomial",df)
+cmod09<- glm(outcomes~(w+z+t+x5)*(w+z+t+x5), family="binomial",df)
+cmod08
+```
+
+By comparing AIC score: cmod01:1579 cmod02:1617 cmod03:1576 cmod04:1359
+cmod05:1407 cmod06:1173 cmod07:1286 cmod08:1241 cmod09:1373
+
+The best models are model06 model08 and model09 since they have the
+lowest AIC score.
+
+```{r}
+coefplot::coefplot(cmod06)
+coefplot::coefplot(cmod08)
+coefplot::coefplot(cmod07)
+```
+
+Several inputs are important: x1:x2, x5:w, x2:x3,splines::ns(z,12):x5,
+z, x4:x5, x1:x4, x5, x3, z:x5, and w.
+
+# B) Bayesian GLM
+
+```{r}
+glm_mod07 <- model.matrix(cmod07)
+glm_mod08 <- model.matrix(cmod08)
+
+
+info_07<- list(
+  yobs = df$outcomes,
+  design_matrix = glm_mod07,
+  mu_beta = 0,
+  tau_beta = 4.5
+)
+
+
+info_08<- list(
+  yobs = df$outcomes,
+  design_matrix = glm_mod08,
+  mu_beta = 0,
+  tau_beta = 4.5
+)
+
+```
+
+```{r}
+my_laplace_glm <- function(start_guess, logpost_func, ...)
+{
+  # code adapted from the `LearnBayes`` function `laplace()`
+  fit <- optim(start_guess,
+               logpost_func,
+               gr = NULL,
+               ...,
+               method = "BFGS",
+               hessian = TRUE,
+               control = list(fnscale = -1, maxit = 5001))
+  
+  mode <- fit$par
+  post_var_matrix <- -solve(fit$hessian)
+  p <- length(mode)
+  int <- p/2 * log(2 * pi) + 0.5 * log(det(post_var_matrix)) + logpost_func(mode, ...)
+  # package all of the results into a list
+  list(mode = mode,
+       var_matrix = post_var_matrix,
+       log_evidence = int,
+       converge = ifelse(fit$convergence == 0,
+                         "YES", 
+                         "NO"),
+       iter_counts = as.numeric(fit$counts[1]))
+}
+
+
+```
+
+```{r}
+logistic_logpost <- function(unknowns, my_info)
+{
+  # extract the design matrix and assign to X
+  X <- my_info$design_matrix
+  
+  # calculate the linear predictor
+  eta <- as.vector( X %*% as.matrix(unknowns))
+  
+  # calculate the event probability
+  mu <- boot::inv.logit(eta)
+  
+  # evaluate the log-likelihood
+  log_lik <- sum(dbinom(x = my_info$yobs,
+                        size = 1, 
+                        prob = mu,
+                        log = TRUE))
+  
+  # evaluate the log-prior
+  log_prior <- sum(dnorm(x = unknowns,
+                         mean = my_info$mu_beta,
+                         sd = my_info$tau_beta,
+                         log = TRUE))
+  
+  # sum together
+  log_lik + log_prior
+}
+```
+
+```{r}
+laplace_glm_07 <- my_laplace_glm(rep(0, ncol(glm_mod07)), logistic_logpost, info_07)
+
+laplace_glm_08 <- my_laplace_glm(rep(0, ncol(glm_mod08)), logistic_logpost, info_08)
+```
+
+```{r}
+laplace_glm_07$log_evidence/ laplace_glm_08$log_evidence
+```
+
+mod08 is consider better
+
+```{r}
+weight <- purrr::map_dbl(list(laplace_glm_07, laplace_glm_08), "log_evidence")
+tibble::tibble(
+  model_name = c("cmod07", "cmod08"),
+  model_weight = exp(weight) / sum(exp(weight)) ) %>% 
+  ggplot(mapping = aes(x = model_name, y = model_weight)) +
+  geom_bar(stat = "identity") +
+  theme_bw()
+```
+
+```{r}
+viz_post_coefs(laplace_glm_08$mode[1:ncol(glm_mod08)],
+               sqrt(diag(laplace_glm_08$var_matrix)[1:ncol(glm_mod08)]),
+               colnames(glm_mod08))
+```
+
+#C ) GLM Predictions
+
+```{r}
+generate_glm_post_samples <- function(mvn_result, num_samples)
+{
+  # specify the number of unknown beta parameters
+  length_beta <- length(mvn_result$mode)
+  
+  # generate the random samples
+  beta_samples <- MASS::mvrnorm(n = num_samples, 
+                                mu = mvn_result$mode, 
+                                Sigma = mvn_result$var_matrix)
+  
+  # change the data type and name
+  beta_samples %>% 
+    as.data.frame() %>% tibble::as_tibble() %>% 
+    purrr::set_names(sprintf("beta_%02d", (1:length_beta) - 1))
+}
+```
+
+```{r}
+post_logistic_pred_samples <- function(Xnew, Bmat)
+{
+  # calculate the linear predictor at all prediction points and posterior samples
+  eta_mat <- Xnew %*% t(Bmat)
+  
+  # calculate the event probability
+  mu_mat <- boot::inv.logit(eta_mat)
+  
+  # book keeping
+  list(eta_mat = eta_mat, mu_mat = mu_mat)
+}
+```
+
+```{r, solution_04c, eval=TRUE}
+summarize_logistic_pred_from_laplace <- function(mvn_result, Xtest, num_samples)
+{
+  # generate posterior samples of the beta parameters
+  betas <- generate_glm_post_samples(mvn_result, num_samples)
+  
+  # data type conversion
+  betas <- as.matrix(betas)
+  
+  # make posterior predictions on the test set
+  pred_test <- post_logistic_pred_samples(Xtest, betas)
+  
+  # calculate summary statistics on the posterior predicted probability
+  # summarize over the posterior samples
+  
+  # posterior mean, should you summarize along rows (rowMeans) or 
+  # summarize down columns (colMeans) ???
+  mu_avg <- rowMeans(pred_test$mu_mat)
+  
+  # posterior quantiles
+  mu_q05 <- apply(pred_test$mu_mat, 1, stats::quantile, probs = 0.05)
+  mu_q95 <- apply(pred_test$mu_mat, 1, stats::quantile, probs = 0.95)
+  
+  # book keeping
+  tibble::tibble(
+    mu_avg = mu_avg,
+    mu_q05 = mu_q05,
+    mu_q95 = mu_q95
+  ) %>% 
+    tibble::rowid_to_column("pred_id")
+}
+```
+
+```{r}
+Xviz_07 <- model.matrix(~(m*(x1+x2+x3+v5)*z*w) ,df)
+
+Xviz_08 <- model.matrix(~(splines::ns(z,12))*x5*w+m,df)
+
+```
+
+```{r}
+info_glm_07 <- list(
+  yobs = df$outcomes,
+  design_matrix = Xviz_07,
+  mu_beta = 0,
+  tau_beta = 4.5
+)
+info_glm_08 <- list(
+  yobs = df$outcomes,
+  design_matrix = Xviz_08,
+  mu_beta = 0,
+  tau_beta = 4.5
+)
+
+```
+
+```{r}
+glm_laplace_07 <- my_laplace_glm(rep(0, ncol(Xviz_07)), logistic_logpost, info_glm_07)
+glm_laplace_08 <- my_laplace_glm(rep(0, ncol(Xviz_08)), logistic_logpost, info_glm_08)
+```
+
+```{r}
+dim(glm_laplace_07$var_matrix)
+dim(Xviz_07)
+```
+
+```{r}
+set.seed(8123) 
+
+post_pred_summary_07 <- summarize_logistic_pred_from_laplace(glm_laplace_07, Xviz_07, 2500) 
+
+post_pred_summary_08 <- summarize_logistic_pred_from_laplace(glm_laplace_08, Xviz_08, 2500) 
+
+```
+
+```{r, make_function_for_viz_trends}
+viz_bayes_logpost_preds <- function(post_pred_summary, input_df)
+{
+  post_pred_summary<- post_pred_summary %>% 
+    left_join(input_df %>% tibble::rowid_to_column('pred_id'),
+              by = 'pred_id') 
+  post_pred_summary  %>% 
+    ggplot(mapping = aes(x = x5)) +
+    geom_ribbon(mapping = aes(ymin = mu_q05,
+                              ymax = mu_q95,
+                              group = interaction(w,z),
+                              fill = m),
+                alpha = 0.25) +
+    geom_line(mapping = aes(y = mu_avg,
+                            color = m),
+              size = 1.15) +
+    facet_wrap( ~ m, labeller = 'label_both') +
+    labs(y = "event probability") +
+    theme_bw()
+}
+```
+
+```{r}
+viz_bayes_logpost_preds(post_pred_summary_08, df)
+```
+
+###iiiD) Train/tune with resampling
+
+```{r}
+my_metric <- "Accuracy"
+my_ctrl <- trainControl(method = 'repeatedcv', number = 10, repeats = 3)
+```
+
+```{r}
+set.seed(1234)
+
+glm_base <- train(outcome~ x1+x2+x3+x4+v1+v2+v3+v4+v5+m,
+                      data = df,
+                      family="binomial",
+                      method = 'glm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+
+glm_base
+```
+
+```{r}
+set.seed(1234)
+glm_expand <- train(outcome~ t+z+w+x5,
+                      data = df,
+                     family="binomial",
+                      method = 'glm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+
+glm_expand
+```
+
+```{r}
+set.seed(1234)
+glm_train_model07 <- train(outcomes ~ (x1+x2+x3+v5)*z*w,
+                        family="binomial",
+                          data = df,
+                      method = 'glm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_train_model07
+```
+
+```{r}
+set.seed(1234)
+glm_train_model08 <- train(outcome ~(splines::ns(z,12)*x5*w+m),
+                          family="binomial",
+                          data = df,
+                      method = 'glm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+                     
+```
+
+```{r}
+set.seed(1234)
+glm_train_model_lasso <- train(outcome ~ (x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w)*m,
+                      data = df,
+                      method = 'glmnet',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_train_model_lasso
+```
+
+```{r}
+set.seed(1234)
+glm_train_model_lasso1 <- train(outcome ~ (x1+x2+x3+x4)*(v1+v2+v3+v4+v5)+(t+z+w)*m ,
+                      data = df,
+                      method = 'glmnet',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_train_model_lasso1
+```
+
+```{r}
+set.seed(1234)
+glm_train_model_lasso_06 <- train(outcome ~ (x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w)*(x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w) +m,
+                      data = df,
+                      method = 'glmnet',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_train_model_lasso_06
+```
+
+```{r}
+set.seed(1234)
+glm_nn_base <- train(outcome ~ x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,
+                      data = df,
+                      method = 'nnet',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_nn_base
+```
+
+```{r}
+set.seed(1234)
+glm_nn_expand <- train(outcomes ~ t+z+w+x5,
+                      data = df,
+                      method = 'nnet',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_nn_expand
+```
+
+```{r}
+set.seed(1234)
+glm_rf_base <- train(outcomes ~ x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,
+                      data = df,
+                      method = 'rf',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_rf_base
+```
+
+```{r}
+set.seed(1234)
+glm_rf_expand <- train(outcomes ~ t+z+w+x5,
+                      data = df,
+                      method = 'rf',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_rf_expand
+```
+
+```{r}
+set.seed(1234)
+glm_xgb_base <- train(outcome ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,  data = df, method = "xgbTree", importance = TRUE,metric = my_metric,
+                             trControl = my_ctrl,tracing = FALSE)
+glm_xgb_base
+```
+
+```{r}
+set.seed(1234)
+glm_xgb_expand <- train(outcome ~t+z+w+x5,  data = df, method = "xgbTree", importance = TRUE,metric = my_metric,
+                             trControl = my_ctrl,tracing = FALSE)
+glm_xgb_expand
+```
+
+```{r}
+set.seed(1234)
+glm_svm_base <- train(outcome ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,  data = df, method = "svmLinear", importance = TRUE,metric = my_metric, trControl = my_ctrl,tracing = FALSE)
+glm_svm_base
+```
+
+```{r}
+set.seed(1234)
+glm_svm_expand <- train(outcome ~t+z+w+x5,  data = df, method = "svmLinear", importance = TRUE,metric = my_metric, trControl = my_ctrl,tracing = FALSE)
+glm_svm_expand
+```
+
+```{r}
+library(naivebayes)
+set.seed(1234)
+glm_nb_base <- train(outcome ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,  data = df, 
+                 method = "naive_bayes", importance = TRUE,metric = "Accuracy", 
+                 trControl = my_ctrl,tracing = FALSE)
+glm_nb_base
+```
+
+```{r}
+set.seed(1234)
+glm_nb_expand <- train(outcome ~t+z+w+x5,  data = df, 
+                 method = "naive_bayes", importance = TRUE,metric = "Accuracy", 
+                 trControl = my_ctrl,tracing = FALSE)
+
+glm_nb_expand
+```
+
+The best model is gradient boost tree since it has the highest accuracy.
+
+```{r}
+glm_xgb_expand%>% readr::write_rds("glmxgb_mod.rds")
+```
+
+## v). Part v: Interpretation and "optimization"
+
+#Linear Regression
+
+```{r}
+opt_lm <- readr::read_rds("rf_mod.rds")
+pred_y <- predict(opt_lm, newdata = df)
+ggplot(df)+ geom_point(aes(x=x5, y=pred_y),color="blue")+ facet_wrap( ~ m)
+ggplot(df)+ geom_point(aes(x=x1, y=pred_y),color="orange")+ facet_wrap( ~ m)
+ggplot(df)+ geom_point(aes(x=z, y=pred_y) ,color="pink")+ facet_wrap( ~ m)
+ggplot(df)+ geom_point(aes(x=w, y=pred_y),color="springgreen3") + facet_wrap( ~ m)
+```
+
+```{r}
+ggplot(df, aes(x=x5, y=pred_y))+ geom_jitter(color="orange", height = 0.02, width=0) + facet_wrap( ~ m)
+ggplot(df, aes(x=z, y=pred_y))+ geom_jitter(color="pink", height = 0.02, width=0)+ facet_wrap( ~ m)
+ggplot(df, aes(x=x1, y=pred_y))+ geom_jitter(color="blue", height = 0.02, width=0)+ facet_wrap( ~ m)
+```
+
+```{r}
+opt_glm <- readr::read_rds("glmxgb_mod.rds")
+pred_y1 <- predict(opt_glm, newdata = df)
+
+ggplot(data = df) + geom_point(mapping = aes(x=x1,y=pred_y1 )) + facet_wrap( ~ m)
+ggplot(data = df) + geom_point(mapping = aes(x=x2,y=pred_y1 )) + facet_wrap( ~ m)
+ggplot(data = df) + geom_point(mapping = aes(x=w,y=pred_y1 )) + facet_wrap( ~ m)
+ggplot(data = df) + geom_point(mapping = aes(x=z,y=pred_y1 )) + facet_wrap( ~ m)
+
+```
+
+``` {r}
+library(caret)
+plot( varImp(opt_glm ) )
+plot( varImp(opt_lm) )
+```
+The most significant variables are w, z, x1, x2. The optimal input settings vary across the values of the categorical variable for logistic regression. And didn't vary for linear regression
+
+# Test Prediction
+
+```{r}
+test_data <- readr::read_csv("fall2022_holdout_inputs.csv", col_names = TRUE)
+test_data <- test_data %>% 
+  mutate(x5 = 1 - (x1 + x2 + x3 + x4),
+         w = x2 / (x3 + x4),
+         z = (x1 + x2) / (x5 + x4),
+         t = v1 * v2)
+```
+```{r}
+pred_lm <- predict(opt_lm, test_data) 
+pred_glm <- predict(opt_glm, test_data, type = 'raw')
+
+predictions <- tibble::tibble(
+  y = predict(opt_lm, newdata = test_data),
+  outcome = predict(opt_glm, newdata = test_data)
+) %>% 
+  bind_cols(
+    predict(opt_glm, newdata = test_data, type = 'prob') %>% 
+      select(probability = event)
+  ) %>% 
+  tibble::rowid_to_column('id')
+
+
+predictions %>% readr::write_csv("preds_all.csv", col_names = TRUE)
+```

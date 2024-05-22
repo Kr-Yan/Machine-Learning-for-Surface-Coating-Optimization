@@ -1,0 +1,1223 @@
+---
+title: "Fall 2022: Final Project"
+subtitle: "Example: read data, save, and reload model object"
+author: "Dr. Joseph P. Yurko"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+This RMarkdown shows how to read in the final project data. It also shows how to calculate the derived input features and how to derive the categorical output from the continuous output. It also demonstrates how to fit a simple model (with `lm()`), save that model, and load it back into the workspace. You may find these actions helpful as you work through the project.  
+
+**You must download the data from Canvas and save the data in the same directory as this RMarkdown file.**  
+
+## Load packages
+
+This example uses the `tidyverse` suite of packages.  
+
+```{r, load_tidyverse}
+library(tidyverse)
+```
+
+## Read data
+
+Please download the final project data from Canvas. If this Rmarkdown file is located in the same directory as the downloaded CSV file, it will be able to load in the data for you. It is **highly** recommended that you use an RStudio RProject to more easily manage the working directory and file paths of the code and objects associated with the final project.  
+
+The code chunk below reads in the final project data.  
+
+```{r, read_final_data}
+df <- readr::read_csv("fall2022_finalproject.csv", col_names = TRUE)
+```
+
+The `readr::read_csv()` function displays the data types and column names associated with the data. However, a glimpse is shown below that reveals the number of rows and also shows some of the representative values for the columns.  
+
+```{r, show_data_glimpse}
+df %>% glimpse()
+```
+
+The data have continuous inputs and a categorical input. The continuous inputs consist of two groups of variables, the "x-variables", `x1` through `x4`, and the "v-variables", `v1` through `v5`. The categorical input is `m`. The response is continuous and is named `output`.  
+
+
+## Simple model
+
+Let's fit a simple linear model for `output`. We will use a linear relationship with a single input, `x1`, for demonstration purposes. The model is fit using the formula interface below and assigned to the `mod01` object.  
+
+```{r, fit_mod01}
+mod01 <- lm( output ~ x1, data = df )
+```
+
+
+The model fitting results are summarized below with a call to the `summary()` function.  
+
+```{r, show_mod01_summary}
+mod01 %>% summary()
+```
+
+### Save model
+
+Let’s go ahead and save `mod01`. There are multiple approaches for saving objects including `.Rda` and `.rds`. I prefer to use the `.rds` object because it’s more streamlined and makes it easier to save and reload a single object, which in our case is a model object. We can use the base `R` `saveRDS()` function or the `tidyverse` equivalent `write_rds()` function from the `readr` package. I prefer to use the `tidyverse` version.
+
+The code chunk below pipes the `mod01` object into `readr::write_rds()`. It saves the object to a file in the local working directory for simplicity. Notice that the `.rds` extension is included after the desired file name.  
+
+```{r, save_mod01}
+mod01 %>% readr::write_rds("my_simple_example_model.rds")
+```
+
+If you ran the above code chunk, check your working directory with the Files tab. You should see the `my_simple_example_model.rds` in your current working directory.
+
+### Reload model
+
+Let’s now load in that model, but assign it to a different variable name. We can read in an `.rds` file with the `readr::read_rds()` function. The object is loaded in and assigned to the `re_load_mod01` object in the code chunk below.  
+
+```{r, reload_mod01}
+re_load_mod01 <- readr::read_rds("my_simple_example_model.rds")
+```
+
+
+We can now work with the `re_load_mod01` object just like the original model we fit, `mod01`. So we can use `summary()` and any other function on the model object, like `predict()`. To confirm let’s print out the summary below. If you compare the summary results to that printed previously you will see that the two are identical.  
+
+```{r, show_reload_summary}
+re_load_mod01 %>% summary()
+```
+
+And to confirm let's check that the model objects are the same with the `all.equal()` function.  
+
+```{r, check_mod01_equal}
+all.equal( mod01, re_load_mod01 )
+```
+
+## Derived quantities
+
+One of the goals of the final project is for you to assess if Subject Matter Expert (SME) recommended features help improve model performance relative to using the as-collected "x-" and "v-" input variables. The input derived *features* are calculated for you in the code chunk below using the `mutate()` function and a glimpse of the resulting data set is displayed to the screen. This is shown to demonstrate how to calculate these derived features from the provided input variables.  
+
+```{r, show_derived_features}
+df <- df %>% 
+  mutate(x5 = 1 - (x1 + x2 + x3 + x4),
+         w = x2 / (x3 + x4),
+         z = (x1 + x2) / (x5 + x4),
+         t = v1 * v2) %>% 
+  glimpse()
+
+input <- df
+```
+
+
+You are required as part of the project to explore the data. Your exploration will demonstrate that `output`, the continuous response, is between 0 and 1. Because of this, it is **highly recommended** that you transform the continuous response before training regression models. You should use the logit transformation to convert the lower and upper bounded `output` variable to an unbounded variable. The regression models should be trained to predict the logit-transformed response. The code chunk below shows how to calculate the unbounded response, `y`, as the logit transformation of the `output` variable.  
+
+```{r, show_logit_transform}
+df <- df %>% 
+  mutate(y = boot::logit(output)) %>% 
+  glimpse()
+```
+
+
+
+Although the response is continuous and you will be working with regression models in this project, you will also train binary classification models. To do so, you must derive a binary response from the continuous response, `output`. You will train classification models to classify the event of interest, which corresponds to `output < 0.33`. The binary response, `outcome`, is calculated in the code chunk below with an `ifelse()` call. The two levels are `'event'` and `non_event'`. The `outcome` column is converted to a factor variable (categorical variable) with the first level assigned to `'event'`. You are required to use this setup for the binary variable that way everyone will work with a consistent binary output.  
+
+```{r, show_binary_outcome}
+df <- df %>% 
+  mutate(outcome = ifelse(output < 0.33, 'event', 'non_event'),
+         outcome = factor(outcome, levels = c("event", "non_event"))) %>% 
+  glimpse()
+```
+
+
+###part 1 exploration
+
+##visualize the distribution of variables
+#Distributions of the 'base feature' inputs
+```{r}
+require(gridExtra)
+p1 <- ggplot(data=df, mapping = aes(x=x1)) + geom_histogram()
+p2 <- ggplot(data=df, mapping = aes(x=x2)) + geom_histogram()
+p3 <- ggplot(data=df, mapping = aes(x=x3)) + geom_histogram()
+p4 <- ggplot(data=df, mapping = aes(x=x4)) + geom_histogram()
+p5 <- ggplot(data=df, mapping = aes(x=v1)) + geom_histogram()
+p6 <- ggplot(data=df, mapping = aes(x=v2)) + geom_histogram()
+p7 <- ggplot(data=df, mapping = aes(x=v3)) + geom_histogram()
+p8 <- ggplot(data=df, mapping = aes(x=v4)) + geom_histogram()
+p9 <- ggplot(data=df, mapping = aes(x=v5)) + geom_histogram()
+p0 <- ggplot(data=df, mapping = aes(x=m)) + geom_bar()
+
+grid.arrange(p1, p2, p3,p4,p5,p6,p7,p8,p9,p0, ncol=2)
+```
+
+
+
+#Distributions of the 'derived feature' inputs
+```{r}
+w1 <- ggplot(data=df, mapping = aes(x=x5)) + geom_histogram()
+w2 <- ggplot(data=df, mapping = aes(x=w)) + geom_histogram()
+w3 <- ggplot(data=df, mapping = aes(x=z)) + geom_histogram()
+w4 <- ggplot(data=df, mapping = aes(x=t)) + geom_histogram()
+w5 <- ggplot(data=df, mapping = aes(x=y)) + geom_histogram()
+grid.arrange(w1, w2, w3,w4, w5, ncol=2)
+```
+
+#Distribution of the output and the logit-transformed response.
+```{r}
+o1 <- ggplot(data=df, mapping = aes(x=output)) + geom_histogram()
+o2 <- ggplot(data=df, mapping = aes(x=y)) + geom_histogram()
+grid.arrange(o1,o2, ncol=2)
+```
+
+#distribution on base feature based on m
+```{r}
+p1 <- ggplot(data=df, mapping = aes(x=x1)) + geom_histogram() + facet_wrap(~m)
+p2 <- ggplot(data=df, mapping = aes(x=x2)) + geom_histogram() + facet_wrap(~m)
+p3 <- ggplot(data=df, mapping = aes(x=x3)) + geom_histogram() + facet_wrap(~m)
+p4 <- ggplot(data=df, mapping = aes(x=x4)) + geom_histogram() + facet_wrap(~m)
+p5 <- ggplot(data=df, mapping = aes(x=v1)) + geom_histogram() + facet_wrap(~m)
+p6 <- ggplot(data=df, mapping = aes(x=v2)) + geom_histogram() + facet_wrap(~m)
+p7 <- ggplot(data=df, mapping = aes(x=v3)) + geom_histogram() + facet_wrap(~m)
+p8 <- ggplot(data=df, mapping = aes(x=v4)) + geom_histogram() + facet_wrap(~m)
+p9 <- ggplot(data=df, mapping = aes(x=v5)) + geom_histogram() + facet_wrap(~m)
+grid.arrange(p1, p2, p3,p4,p5,p6,p7,p8,p9)
+```
+
+x1,v4,v2 differ a little based on the discrete group
+
+```{r}
+w1 <- ggplot(data=df, mapping = aes(x=x5)) + geom_histogram() + facet_wrap(~m)
+w2 <- ggplot(data=df, mapping = aes(x=w)) + geom_histogram() + facet_wrap(~m)
+w3 <- ggplot(data=df, mapping = aes(x=z)) + geom_histogram() + facet_wrap(~m)
+w4 <- ggplot(data=df, mapping = aes(x=t)) + geom_histogram() + facet_wrap(~m)
+w5 <- ggplot(data=df, mapping = aes(x=y)) + geom_histogram() + facet_wrap(~m)
+grid.arrange(w1, w2, w3,w4, w5)
+```
+
+There are no big difference on these derived features.
+
+```{r}
+o1 <- ggplot(data=df, mapping = aes(x=output)) + geom_histogram() + facet_wrap(~m)
+o2 <- ggplot(data=df, mapping = aes(x=y)) + geom_histogram() + facet_wrap(~m)
+grid.arrange(o1,o2)
+```
+there are no big difference in output based on discrete groups.
+
+
+```{r}
+library(corrplot)
+input <- subset(input,select = -c(output,m))
+cor(input)
+corrplot(cor(input), type = "upper", order = "hclust", 
+         tl.col = "black", tl.srt = 45)
+```
+From the plot, x5 and z, x5 and x3, x5 and x2, v1 and t, t and v2 are strongly correlated.
+
+
+```{r}
+new_df <- subset(df,select = -c(outcome,m))
+corrplot(cor(new_df), type = "upper", order = "hclust", 
+         tl.col = "black", tl.srt = 45)
+ggplot(data=df) + geom_jitter(mapping = aes(x= x1, y=y))
+ggplot(data=df) + geom_jitter(mapping = aes(x= x3, y=y))
+ggplot(data=df) + geom_jitter(mapping = aes(x= x4, y=y))
+ggplot(data=df) + geom_jitter(mapping = aes(x= x5, y=y))
+ggplot(data=df) + geom_jitter(mapping = aes(x= x3, y=y))
+```
+
+From the plot, output and z, y and z are correlated.
+
+```{r}
+n0 <- ggplot(data = df) + geom_point(mapping = aes(x = x1 , y = outcome))
+n1 <- ggplot(data = df) + geom_point(mapping = aes(x = x2 , y = outcome))
+n2 <- ggplot(data = df) + geom_point(mapping = aes(x = x3 , y = outcome))
+n3 <- ggplot(data = df) + geom_point(mapping = aes(x = x4 , y = outcome))
+n4 <- ggplot(data = df) + geom_point(mapping = aes(x = v1 , y = outcome))
+n5 <- ggplot(data = df) + geom_point(mapping = aes(x = v2 , y = outcome))
+n6 <- ggplot(data = df) + geom_point(mapping = aes(x = v3 , y = outcome))
+n7 <- ggplot(data = df) + geom_point(mapping = aes(x = v4 , y = outcome))
+n8 <- ggplot(data = df) + geom_point(mapping = aes(x = v5 , y = outcome))
+n9 <- ggplot(data = df) + geom_point(mapping = aes(x = t , y = outcome))
+n10 <- ggplot(data = df) + geom_point(mapping = aes(x = z , y = outcome))
+n11 <- ggplot(data = df) + geom_point(mapping = aes(x = x5 , y = outcome))
+n12 <- ggplot(data = df) + geom_point(mapping = aes(x = w , y = outcome))
+grid.arrange(n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12)
+```
+
+
+###part IIA) Linear model
+##Base feature
+#All linear additive features
+```{r}
+model1 <- lm(y~ x1+x2+x3+x4+v1+v2+v3+v4+v5+m, data= df)
+summary(model1)
+```
+#Interaction of the categorical input with all continuous inputs
+```{r}
+model2 <- lm(y ~ m*(x1+x2+x3+x4+v1+v2+v3+v4+v5), data = df)
+summary(model2)
+```
+#All pair-wise interactions of the continuous inputs
+```{r}
+model3 <- lm(y ~ (x1+x2+x3+x4+v1+v2+v3+v4+v5)*(x1+x2+x3+x4+v1+v2+v3+v4+v5), data = df)
+summary(model3)
+```
+
+##Models using the “expanded feature” set
+```{r}
+model4 <- lm(y~ t+z+w+x5, data= df)
+summary(model4)
+```
+
+#Interaction of the categorical input with continuous features
+```{r}
+model5 <- lm(y~ m*(t+z+w+x5), data= df)
+summary(model5)
+```
+
+#Pair-wise interactions between the continuous features
+```{r}
+model6 <- lm(y ~(t+z+w+x5)*(t+z+w+x5), data = df)
+summary(model6)
+```
+
+##DIY
+```{r}
+model7 <- lm(y ~ x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w+m, data = df)
+summary(model7)
+```
+
+
+```{r}
+model8 <- lm(y ~ (x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w)*m, data = df)
+summary(model8)
+```
+
+
+```{r}
+model9 <- lm(y ~ (x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w)*(x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w) + m, data = df)
+summary(model9)
+```
+
+```{r}
+broom::glance(model1)
+broom::glance(model2)
+broom::glance(model3)
+broom::glance(model4)
+broom::glance(model5)
+broom::glance(model6)
+broom::glance(model7)
+broom::glance(model8)
+broom::glance(model9)
+```
+By using adjusted r squared, the model9 is the best.
+
+```{r}
+coefplot::coefplot(model9)
+coefplot::coefplot(model8)
+coefplot::coefplot(model7)
+```
+
+From the model7, x1, x2, x3 and w variables are important for the models. While for the model 8,9, they share the similar results.
+
+###iiB)
+```{r}
+X09 <- model.matrix(model9)
+
+info_09<- list(
+  yobs = df$y,
+  design_matrix = X09,
+  mu_beta = 0,
+  tau_beta = 50,
+  sigma_rate = 1
+)
+
+X08 <- model.matrix(model8)
+
+info_08<- list(
+  yobs = df$y,
+  design_matrix = X08,
+  mu_beta = 0,
+  tau_beta = 50,
+  sigma_rate = 1
+)
+
+```
+
+```{r}
+lm_logpost <- function(unknowns, my_info)
+{
+  # specify the number of unknown beta parameters
+  length_beta <- ncol(my_info$design_matrix)
+  
+  # extract the beta parameters from the `unknowns` vector
+  beta_v <- unknowns[1:length_beta]
+  
+  # extract the unbounded noise parameter, varphi
+  lik_varphi <- unknowns[length_beta + 1]
+  
+  # back-transform from varphi to sigma
+  lik_sigma <- exp(lik_varphi)
+  
+  # extract design matrix
+  X <- my_info$design_matrix
+  
+  # calculate the linear predictor
+  mu <- as.vector( X %*% as.matrix(beta_v) )
+  
+  # evaluate the log-likelihood
+  log_lik <- sum(dnorm(x = my_info$yobs,
+                       mean = mu,
+                       sd = lik_sigma,
+                       log = TRUE))
+  
+  # evaluate the log-prior
+  log_prior_beta <- sum(dnorm(x = beta_v,
+                              mean = my_info$mu_beta,
+                              sd = my_info$tau_beta,
+                              log = TRUE))
+  
+  log_prior_sigma <- dexp(x = lik_sigma,
+                          rate = my_info$sigma_rate,
+                          log = TRUE)
+  
+  # add the mean trend prior and noise prior together
+  log_prior <- log_prior_beta + log_prior_sigma
+  
+  # account for the transformation
+  log_derive_adjust <- lik_varphi
+  
+  # sum together
+  log_lik + log_prior + log_derive_adjust
+}
+```
+
+```{r}
+my_laplace <- function(start_guess, logpost_func, ...)
+{
+  # code adapted from the `LearnBayes`` function `laplace()`
+  fit <- optim(start_guess,
+               logpost_func,
+               gr = NULL,
+               ...,
+               method = "BFGS",
+               hessian = TRUE,
+               control = list(fnscale = -1, maxit = 1001))
+  
+  mode <- fit$par
+  post_var_matrix <- -solve(fit$hessian)
+  p <- length(mode)
+  int <- p/2 * log(2 * pi) + 0.5 * log(det(post_var_matrix)) + logpost_func(mode, ...)
+  # package all of the results into a list
+  list(mode = mode,
+       var_matrix = post_var_matrix,
+       log_evidence = int,
+       converge = ifelse(fit$convergence == 0,
+                         "YES", 
+                         "NO"),
+       iter_counts = as.numeric(fit$counts[1]))
+}
+```
+
+```{r}
+viz_post_coefs <- function(post_means, post_sds, xnames)
+{
+  tibble::tibble(
+    mu = post_means,
+    sd = post_sds,
+    x = xnames
+  ) %>% 
+    mutate(x = factor(x, levels = xnames)) %>% 
+    ggplot(mapping = aes(x = x)) +
+    geom_hline(yintercept = 0, color = 'grey', linetype = 'dashed') +
+    geom_point(mapping = aes(y = mu)) +
+    geom_linerange(mapping = aes(ymin = mu - 2 * sd,
+                                 ymax = mu + 2 * sd,
+                                 group = x)) +
+    labs(x = 'feature', y = 'coefficient value') +
+    coord_flip() +
+    theme_bw()
+}
+
+```
+
+```{r}
+laplace_09 <- my_laplace(rep(0, ncol(X09)+1), lm_logpost, info_09)
+
+laplace_08 <- my_laplace(rep(0, ncol(X08)+1), lm_logpost, info_08)
+```
+
+```{r}
+viz_post_coefs(laplace_09$mode[1:ncol(X09)],
+               sqrt(diag(laplace_09$var_matrix)[1:ncol(X09)]),
+               colnames(X09))
+```
+
+
+```{r}
+viz_post_coefs(laplace_08$mode[1:ncol(X08)],
+               sqrt(diag(laplace_08$var_matrix)[1:ncol(X08)]),
+               colnames(X08))
+```
+
+
+```{r}
+exp(laplace_09$log_evidence-laplace_08$log_evidence)
+```
+
+From the result, use log-arithmetic to calculate the Bayes Factor, the model 9 is much better than model 8 since it is bigger than 1.
+
+
+Question: How does the lm() maximum likelihood estimate (MLE) on 𝜎 relate to the posterior uncertainty on 𝜎?
+
+```{r}
+min(df$x1)
+max(df$x1)
+min(df$x2)
+
+```
+
+
+```{r}
+viz_grid <- expand.grid(x1 = seq(min(df$x1), max(df$x1), length.out = 10),
+                        m = c('A','B','C','D','E'),
+                        x2 = seq(min(df$x2), max(df$x2), length.out = 10),
+                        x3 = seq(min(df$x3), max(df$x3), length.out = 10),
+                        x4 = seq(min(df$x4), max(df$x4), length.out = 10),
+                        v1 = seq(min(df$v1), max(df$v1), length.out = 10),
+                        v2 = seq(min(df$v2), max(df$v2), length.out = 10),
+                        v3 = seq(min(df$v3), max(df$v3), length.out = 10),
+                        KEEP.OUT.ATTRS = FALSE,
+                        stringsAsFactors = FALSE) %>% 
+  as.data.frame() %>% tibble::as_tibble()
+```
+
+```{r}
+pred_lm_01 <- tidy_predict(model9, xnew = df)
+```
+
+
+```{r}
+pred_lm_01 %>% 
+  ggplot(mapping = aes(x = x1)) +
+  geom_ribbon(mapping = aes(ymin = pred_lwr, ymax = pred_upr),
+              fill = 'orange') +
+  geom_ribbon(mapping = aes(ymin = ci_lwr, ymax = ci_upr),
+              fill = 'grey') +
+  geom_line(mapping = aes(y = pred),
+            color = 'black') +
+  coord_cartesian(ylim = c(-7, 7)) +
+  facet_wrap(~m, labeller = "label_both") +
+  theme_bw()
+```
+
+
+```{r}
+pred_lm_02 <- tidy_predict(model8, xnew = df)
+```
+
+
+```{r}
+pred_lm_02 %>% 
+  ggplot(mapping = aes(x = x1)) +
+  geom_ribbon(mapping = aes(ymin = pred_lwr, ymax = pred_upr),
+              fill = 'orange') +
+  geom_ribbon(mapping = aes(ymin = ci_lwr, ymax = ci_upr),
+              fill = 'grey') +
+  geom_line(mapping = aes(y = pred),
+            color = 'black') +
+  coord_cartesian(ylim = c(-7, 7)) +
+  facet_wrap(~m, labeller = "label_both") +
+  theme_bw()
+```
+
+
+Overall the predictive trends are almost consistent based on m for both models, but slightly different.
+
+# iiD) Train/tune with resampling
+
+
+```{r}
+library(caret)
+```
+
+```{r}
+
+my_ctrl <- trainControl(method = 'repeatedcv', number = 5, repeats = 5)
+
+my_metric <- "RMSE"
+```
+
+
+```{r}
+set.seed(1234)
+model_base <- train(y ~ x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m ,
+                      data = df,
+                      method = 'lm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+
+model_base
+```
+
+```{r}
+set.seed(1234)
+model_extact <- train(y ~ t+z+w+x5 ,
+                      data = df,
+                      method = 'lm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+
+model_extact
+```
+
+```{r}
+set.seed(1234)
+model_8 <- train(y ~ (x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w)*m,
+                      data = df,
+                      method = 'lm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+
+model_8
+```
+
+```{r}
+set.seed(1234)
+model_9 <- train(y ~ (x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w)*(x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w) + m ,
+                      data = df,
+                      method = 'lm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+
+model_9
+```
+
+```{r}
+set.seed(1234)
+model_8_losso <- train(y ~ (x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w)*m,
+                      data = df,
+                      method = 'glmnet',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+model_8_losso
+
+```
+
+
+```{r}
+set.seed(1234)
+model_9_losso <- train(y ~ (x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w)*(x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w) + m ,
+                      data = df,
+                      method = 'glmnet',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+
+model_9_losso
+```
+
+```{r}
+set.seed(1234)
+model_7_losso <- train(y ~ x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w+m ,
+                      data = df,
+                      method = 'glmnet',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+
+model_7_losso
+```
+
+
+##neural network
+
+```{r}
+nnet_grid <- expand.grid(
+                        size = c(5,9,13,17),
+                        decay = exp(seq(-6,0,length.out = 11)))
+```
+
+#base feature
+```{r}
+set.seed(1234)
+nnet_tune <- caret::train(y ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m ,
+                   data = df,
+                   method = 'nnet',
+                   metric = my_metric,
+                   preProcess = c("center", "scale"),
+                   tuneGrid = nnet_grid,
+                   trControl = my_ctrl,
+                   trace = FALSE)
+nnet_tune
+```
+```{r}
+set.seed(1234)
+nnet_tune_extract <- caret::train(y ~t+z+w+x5,
+                   data = df,
+                   method = 'nnet',
+                   metric = my_metric,
+                   preProcess = c("center", "scale"),
+                   tuneGrid = nnet_grid,
+                   trControl = my_ctrl,
+                   trace = FALSE)
+nnet_tune_extract
+```
+
+```{r}
+set.seed(1234)
+rf_default <- train(y ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,  data = df, method = "rf", importance = TRUE,metric = my_metric,
+                             trControl = my_ctrl,)
+rf_default
+```
+
+```{r}
+set.seed(1234)
+rf_extract <- train(y ~t+z+w+x5,  data = df, method = "rf", importance = TRUE,metric = my_metric,
+                             trControl = my_ctrl,)
+rf_extract
+```
+
+
+```{r}
+set.seed(1234)
+xgb_default <- train(y ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,  data = df, method = "xgbTree", importance = TRUE,metric = my_metric,
+                             trControl = my_ctrl,tracing = FALSE)
+xgb_default
+```
+
+
+```{r}
+set.seed(1234)
+xgb_extract <- train(y ~t+z+w+x5,  data = df, method = "xgbTree", importance = TRUE,metric = my_metric,
+                             trControl = my_ctrl,tracing = FALSE)
+xgb_extract
+```
+
+#Principal Component Analysis
+```{r}
+pca_default <- train(y ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,  data = df, method = "pcr", importance = TRUE,metric = my_metric, trControl = my_ctrl,tracing = FALSE)
+pca_default 
+```
+
+
+```{r}
+pca_extract <- train(y ~t+z+w+x5,  data = df, method = "pcr", importance = TRUE,metric = my_metric, trControl = my_ctrl,tracing = FALSE)
+pca_extract
+```
+
+#Support Vector Machines with Linear Kernel
+```{r}
+svm_default <- train(y ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,  data = df, method = "svmLinear", importance = TRUE,metric = my_metric, trControl = my_ctrl,tracing = FALSE)
+svm_default
+```
+
+```{r}
+svm_extract <- train(y ~t+z+w+x5,  data = df, method = "svmLinear", importance = TRUE,metric = my_metric, trControl = my_ctrl,tracing = FALSE)
+svm_extract
+```
+
+the best model is model_9_losso whose RMSE is 1.362793.
+
+###Part iii: Classification
+
+```{r}
+df$outcomes <- factor(df$outcome, labels = c(0,1), levels = c('non_event', 'event'))
+
+df$outcomes <- as.numeric(df$outcomes)-1
+
+```
+
+
+```{r}
+glm_model1 <- glm(outcome~ x1+x2+x3+x4+v1+v2+v3+v4+v5+m,family="binomial" ,data= df)
+summary(glm_model1)
+```
+
+```{r}
+glm_model2 <- glm(outcome ~ m*(x1+x2+x3+x4+v1+v2+v3+v4+v5), family="binomial" ,data= df)
+summary(glm_model2)
+```
+
+```{r}
+glm_model3 <- glm(outcome ~ (x1+x2+x3+x4+v1+v2+v3+v4+v5)*(x1+x2+x3+x4+v1+v2+v3+v4+v5),family="binomial", data = df)
+summary(glm_model3)
+```
+```{r}
+glm_model4 <- glm(outcome~ t+z+w+x5, family="binomial",data= df)
+summary(glm_model4)
+```
+
+```{r}
+glm_model5 <- glm(outcome~m*(t+z+w+x5), family="binomial", data= df)
+summary(glm_model5)
+```
+
+```{r}
+glm_model6 <- glm(outcome ~(t+z+w+x5)*(t+z+w+x5),family="binomial", data= df )
+summary(glm_model6)
+```
+
+```{r}
+glm_model7 <- glm(outcome ~ x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w+m,family="binomial", data = df)
+summary(glm_model7)
+```
+
+```{r}
+glm_model8 <- glm(outcome ~ (x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w)*m,family="binomial", data = df )
+summary(glm_model8)
+```
+
+The performance metric chosen here is AIC. glm_model7 is the best glm_model6 and glm_model4 are also good.
+
+```{r}
+coefplot::coefplot(glm_model7)
+coefplot::coefplot(glm_model6)
+coefplot::coefplot(glm_model4)
+```
+For the glm_model7, intercept, x1, x2, x3, v2, z,w are important and it has the more variables than others. For the glm_model6,, intercept, w,x5, z:x5, w:x5 are important. For glm_model4, intercept, z,w,and x5 are important. In summary, x5, z and w are important variable.
+
+## iiiB) Bayesian GLM
+
+###iiB)
+```{r}
+glm_X07 <- model.matrix(glm_model7)
+
+info_07<- list(
+  yobs = df$outcomes,
+  design_matrix = glm_X07,
+  mu_beta = 0,
+  tau_beta = 4.5
+)
+
+glm_X06 <- model.matrix(glm_model6)
+
+info_06<- list(
+  yobs = df$outcomes,
+  design_matrix = glm_X06,
+  mu_beta = 0,
+  tau_beta = 4.5
+)
+
+```
+
+```{r}
+my_laplace_glm <- function(start_guess, logpost_func, ...)
+{
+  # code adapted from the `LearnBayes`` function `laplace()`
+  fit <- optim(start_guess,
+               logpost_func,
+               gr = NULL,
+               ...,
+               method = "BFGS",
+               hessian = TRUE,
+               control = list(fnscale = -1, maxit = 5001))
+  
+  mode <- fit$par
+  post_var_matrix <- -solve(fit$hessian)
+  p <- length(mode)
+  int <- p/2 * log(2 * pi) + 0.5 * log(det(post_var_matrix)) + logpost_func(mode, ...)
+  # package all of the results into a list
+  list(mode = mode,
+       var_matrix = post_var_matrix,
+       log_evidence = int,
+       converge = ifelse(fit$convergence == 0,
+                         "YES", 
+                         "NO"),
+       iter_counts = as.numeric(fit$counts[1]))
+}
+```
+
+
+```{r}
+logistic_logpost <- function(unknowns, my_info)
+{
+  # extract the design matrix and assign to X
+  X <- my_info$design_matrix
+  
+  # calculate the linear predictor
+  eta <- as.vector( X %*% as.matrix(unknowns))
+  
+  # calculate the event probability
+  mu <- boot::inv.logit(eta)
+  
+  # evaluate the log-likelihood
+  log_lik <- sum(dbinom(x = my_info$yobs,
+                        size = 1, 
+                        prob = mu,
+                        log = TRUE))
+  
+  # evaluate the log-prior
+  log_prior <- sum(dnorm(x = unknowns,
+                         mean = my_info$mu_beta,
+                         sd = my_info$tau_beta,
+                         log = TRUE))
+  
+  # sum together
+  log_lik + log_prior
+}
+```
+
+```{r}
+df %>% glimpse()
+```
+
+
+```{r}
+laplace_glm_07 <- my_laplace_glm(rep(-1, ncol(glm_X07)), logistic_logpost, info_07)
+
+laplace_glm_06 <- my_laplace_glm(rep(0, ncol(glm_X06)), logistic_logpost, info_06)
+```
+
+```{r}
+viz_post_coefs(laplace_glm_07$mode[1:ncol(glm_X07)],
+               sqrt(diag(laplace_glm_07$var_matrix)[1:ncol(glm_X07)]),
+               colnames(glm_X07))
+```
+
+
+```{r}
+viz_post_coefs(laplace_glm_06$mode[1:ncol(glm_X06)],
+               sqrt(diag(laplace_glm_06$var_matrix)[1:ncol(glm_X06)]),
+               colnames(glm_X06))
+```
+
+
+
+##iiiC)glm prediction
+
+```{r}
+viz_grid <- expand.grid(x1 = seq(min(df$x1), max(df$x1), length.out = 9), 
+                        x2 = seq(min(df$x2), max(df$x2), length.out = 9),
+                        x3 = seq(min(df$x3), max(df$x3), length.out = 9),
+                        m = unique(df$m),
+                        KEEP.OUT.ATTRS = FALSE,
+                        stringsAsFactors = FALSE) %>% 
+  as.data.frame() %>% tibble::as_tibble()
+
+viz_grid %>% glimpse()
+```
+
+```{r}
+generate_glm_post_samples <- function(mvn_result, num_samples)
+{
+  # specify the number of unknown beta parameters
+  length_beta <- length(mvn_result$mode)
+  
+  # generate the random samples
+  beta_samples <- MASS::mvrnorm(n = num_samples,
+                                mu = mvn_result$mode,
+                                Sigma = mvn_result$var_matrix)
+  
+  # change the data type and name
+  beta_samples %>% 
+    as.data.frame() %>% tibble::as_tibble() %>% 
+    purrr::set_names(sprintf("beta_%02d", (1:length_beta) - 1))
+}
+```
+
+
+```{r}
+post_logistic_pred_samples <- function(Xnew, Bmat)
+{
+  # calculate the linear predictor at all prediction points and posterior samples
+  eta_mat <- Xnew %*% t(Bmat)
+  
+  # calculate the event probability
+  mu_mat <- boot::inv.logit(eta_mat)
+  
+  # book keeping
+  list(eta_mat = eta_mat, mu_mat = mu_mat)
+}
+```
+
+
+```{r}
+summarize_logistic_pred_from_laplace <- function(mvn_result, Xtest, num_samples)
+{
+  # generate posterior samples of the beta parameters
+  betas <- generate_glm_post_samples(mvn_result, num_samples)
+  
+  # data type conversion
+  betas <- as.matrix(betas)
+  
+  # make posterior predictions on the test set
+  pred_test <- post_logistic_pred_samples(Xtest, betas)
+  
+  # calculate summary statistics on the posterior predicted probability
+  # summarize over the posterior samples
+  
+  # posterior mean, should you summarize along rows (rowMeans) or 
+  # summarize down columns (colMeans) ???
+  mu_avg <- rowMeans(pred_test$mu_mat)
+  
+  # posterior quantiles
+  mu_q05 <- apply(pred_test$mu_mat, 1, stats::quantile, probs = 0.05)
+  mu_q95 <- apply(pred_test$mu_mat, 1, stats::quantile, probs = 0.95)
+  
+  # book keeping
+  tibble::tibble(
+    mu_avg = mu_avg,
+    mu_q05 = mu_q05,
+    mu_q95 = mu_q95
+  ) %>% 
+    tibble::rowid_to_column("pred_id")
+}
+```
+
+```{r}
+Xviz_D <- model.matrix( ~ (x1+x2+x3)*m, data = viz_grid )
+
+Xviz_G <- model.matrix( ~ (x1+x2+x3)*(x1+x2+x3)+m, data = viz_grid ) 
+```
+
+```{r}
+Xmat_D <- model.matrix( ~ (x1+x2+x3)*m, data = df )
+
+Xmat_G <- model.matrix( ~ (x1+x2+x3)*(x1+x2+x3)+m, data = df )
+
+info_D <- list(
+  yobs = df$outcomes,
+  design_matrix = Xmat_D,
+  mu_beta = 0,
+  tau_beta = 4.5
+)
+info_G <- list(
+  yobs = df$outcomes,
+  design_matrix = Xmat_G,
+  mu_beta = 0,
+  tau_beta = 4.5
+)
+```
+
+
+```{r}
+laplace_D <- my_laplace_glm(rep(0, ncol(Xmat_D)), logistic_logpost, info_D)
+laplace_G <- my_laplace_glm(rep(0, ncol(Xmat_G)), logistic_logpost, info_G)
+```
+
+
+```{r}
+set.seed(8123) 
+
+post_pred_summary_D <- summarize_logistic_pred_from_laplace(laplace_D, Xviz_D, 2500)
+
+post_pred_summary_G <- summarize_logistic_pred_from_laplace(laplace_G, Xviz_G, 2500)
+
+```
+
+```{r}
+viz_bayes_logpost_preds <- function(post_pred_summary, input_df)
+{
+  post_pred_summary %>% 
+    left_join(input_df %>% tibble::rowid_to_column('pred_id'),
+              by = 'pred_id') %>% 
+    ggplot(mapping = aes(x = x3)) +
+    geom_ribbon(mapping = aes(ymin = mu_q05,
+                              ymax = mu_q95,
+                              group = interaction(x1, x2),
+                              fill = x1),
+                alpha = 0.25) +
+    geom_line(mapping = aes(y = mu_avg,
+                            group = interaction(x1, x2),
+                            color = x1),
+              size = 1.15) +
+    facet_wrap( ~ m, labeller = 'label_both') +
+    labs(y = "event probability") +
+    theme_bw()
+}
+```
+
+```{r}
+viz_bayes_logpost_preds(post_pred_summary_D, viz_grid)
+```
+```{r}
+viz_bayes_logpost_preds(post_pred_summary_G, viz_grid)
+```
+
+###iiiD) Train/tune with resampling
+
+
+
+```{r}
+my_metric <- "Accuracy"
+```
+
+
+
+```{r}
+set.seed(1234)
+glm_base <- train(outcome~ x1+x2+x3+x4+v1+v2+v3+v4+v5+m,
+                      data = df,
+                  family="binomial",
+                      method = 'glm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+
+glm_base
+```
+
+```{r}
+set.seed(1234)
+glm_extract <- train(outcome~ t+z+w+x5,
+                      data = df,
+                     family="binomial",
+                      method = 'glm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+
+glm_extract
+```
+
+```{r}
+set.seed(1234)
+glm_train_model7 <- train(outcome ~ x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w+m,
+                        family="binomial",
+                          data = df,
+                      method = 'glm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_train_model7
+```
+
+```{r}
+set.seed(1234)
+glm_train_model6 <- train(outcome ~(t+z+w+x5)*(t+z+w+x5),
+                          family="binomial",
+                          data = df,
+                      method = 'glm',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_train_model6                         
+```
+
+
+```{r}
+set.seed(1234)
+glm_train_model_losso <- train(outcome ~ (x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w)*m,
+                      data = df,
+                      method = 'glmnet',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_train_model_losso
+```
+
+```{r}
+set.seed(1234)
+glm_train_model_losso1 <- train(outcome ~ (x1+x2+x3+x4)*(v1+v2+v3+v4+v5)+(t+z+w)*m ,
+                      data = df,
+                      method = 'glmnet',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_train_model_losso1
+```
+
+
+```{r}
+set.seed(1234)
+glm_train_model_losso2 <- train(outcome ~ (x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w)*(x1+x2+x3+x4+v1+v2+v3+v4+v5 + t+z+w) +m,
+                      data = df,
+                      method = 'glmnet',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_train_model_losso2
+```
+
+```{r}
+set.seed(1234)
+glm_nn1 <- train(outcome ~ x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,
+                      data = df,
+                      method = 'nnet',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_nn1
+```
+
+```{r}
+set.seed(1234)
+glm_nn2 <- train(outcome ~ t+z+w+x5,
+                      data = df,
+                      method = 'nnet',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_nn2
+```
+
+```{r}
+set.seed(1234)
+glm_rf1 <- train(outcome ~ x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,
+                      data = df,
+                      method = 'rf',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_rf1
+```
+
+```{r}
+set.seed(1234)
+glm_rf2 <- train(outcome ~ t+z+w+x5,
+                      data = df,
+                      method = 'rf',
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl)
+glm_rf2
+```
+
+
+```{r}
+set.seed(1234)
+glm_xgb1 <- train(outcome ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,  data = df, method = "xgbTree", importance = TRUE,metric = my_metric,
+                             trControl = my_ctrl,tracing = FALSE)
+glm_xgb1
+```
+
+```{r}
+set.seed(1234)
+glm_xgb2 <- train(outcome ~t+z+w+x5,  data = df, method = "xgbTree", importance = TRUE,metric = my_metric,
+                             trControl = my_ctrl,tracing = FALSE)
+glm_xgb2
+```
+
+```{r}
+set.seed(1234)
+glm_svm1 <- train(outcome ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,  data = df, method = "svmLinear", importance = TRUE,metric = my_metric, trControl = my_ctrl,tracing = FALSE)
+glm_svm1
+```
+
+```{r}
+set.seed(1234)
+glm_svm2 <- train(outcome ~t+z+w+x5,  data = df, method = "svmLinear", importance = TRUE,metric = my_metric, trControl = my_ctrl,tracing = FALSE)
+glm_svm2
+```
+
+```{r}
+set.seed(1234)
+glm_nb1 <- train(outcome ~x1 + x2 + x3 + x4 +v1 + v2+v3+v4+v5+m,  data = df, method = "naive_bayes", importance = TRUE,metric = my_metric, trControl = my_ctrl,tracing = FALSE)
+glm_nb1
+```
+
+```{r}
+set.seed(1234)
+glm_nb2 <- train(outcome ~t+z+w+x5,  data = df, method = "naive_bayes", metric = my_metric, trControl = my_ctrl,tracing = FALSE)
+glm_nb2
+```
+
+
+```{r}
+
+```
+
+
+
