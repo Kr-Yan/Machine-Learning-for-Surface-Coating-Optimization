@@ -73,3 +73,20 @@ Additional derived features were also considered, such as:
    git clone https://github.com/Kr-Yan/surface-coating-optimization.git
    cd surface-coating-optimization
 
+2. **Install Dependencies**:
+   Install the necessary R packages as listed in the requirements.txt file.
+   ```bash
+   install.packages(c("caret", "tidymodels", "rstanarm", "boot"))
+
+3. **Run the Analysis**:
+   Execute the R scripts in the scripts/ directory to reproduce the analysis and results.
+   ```bash
+   source("scripts/exploration.R")
+   source("scripts/regression_modeling.R")
+   source("scripts/classification_modeling.R")
+
+4. **View Results**:
+   Generated results can be found in the results/ directory, including visualizations and performance metrics.
+
+## Author
+- Kairuo Yan
