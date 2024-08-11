@@ -1,1 +1,1 @@
-*.R linguist-language=Rmd
+*.Rmd linguist-language=R
